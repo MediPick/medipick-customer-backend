@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
 
 async def create_db():
-    engine = create_async_engine("postgresql+asyncpg://postgres:sameera@localhost:5432/postgres", isolation_level="AUTOCOMMIT")
+    # Replace <username> and <password> with your actual PostgreSQL credentials
+    engine = create_async_engine("postgresql+asyncpg://<username>:<password>@localhost:5432/postgres", isolation_level="AUTOCOMMIT")
     async with engine.connect() as conn:
         result = await conn.execute(text("SELECT 1 FROM pg_database WHERE datname = 'medipick_db'"))
         if not result.scalar():
