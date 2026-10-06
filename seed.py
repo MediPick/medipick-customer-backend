@@ -61,12 +61,11 @@ MEDICINES = [
      "Antibiotic for bacterial infections. Prescription required.", None),
 ]
 
-# name, reg no, nmra, pharmacist, reg, phone, address, lat, lng, response time, offer, rating total/count, image
 PHARMACIES = [
     ("Union Chemists", "PV-00123", "NMRA-2024-0451", "Dr. Nimali Perera", "SLMC-PH-2231", "+94112345678",
-     "No. 45, Ward Place, Colombo 07", 6.9147, 79.8656, "5 - 15 mins", "10% off vitamins", 46, 10, "P1"),
+     "No. 45, Ward Place, Colombo 07", 6.9147, 79.8656, "5 - 15 mins", "10% off vitamins", 46, 10, "P2"),
     ("Healthguard Pharmacy", "PV-00456", "NMRA-2023-1187", "Mr. Kasun Silva", "SLMC-PH-1874", "+94112876543",
-     "No. 212, High Level Road, Nugegoda", 6.8649, 79.8997, "10 - 20 mins", None, 43, 10, "P2"),
+     "No. 212, High Level Road, Nugegoda", 6.8649, 79.8997, "10 - 20 mins", None, 43, 10, "P1"),
     ("City Pharmacy Dehiwala", "PV-00789", "NMRA-2022-0932", "Ms. Tharushi Fernando", "SLMC-PH-2410", "+94112723456",
      "No. 88, Galle Road, Dehiwala", 6.8511, 79.8653, "15 - 25 mins", "Free delivery over LKR 3000", 39, 10, "P3"),
 ]

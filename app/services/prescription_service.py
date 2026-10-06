@@ -41,20 +41,22 @@ class PrescriptionService:
         db: AsyncSession,
         user: User,
         customer: Customer,
-        file_key: str,
+        file_keys: list[str],
         pharmacy_id: uuid.UUID | None,
         background_tasks: BackgroundTasks,
     ) -> Prescription:
-        if (
-            not storage.is_valid_file_key(file_key)
-            or not file_key.startswith(f"{UPLOAD_PURPOSE}/")
-            or storage.owner_id_from_key(file_key) != str(user.id)
-        ):
-            raise MediPickException("INVALID_FILE_KEY", 400, "That file key wasn't issued to you.")
-        if not storage.file_exists(file_key):
-            raise MediPickException("FILE_NOT_UPLOADED", 400, "Upload the file to the upload URL first.")
+        for file_key in file_keys:
+            if (
+                not storage.is_valid_file_key(file_key)
+                or not file_key.startswith(f"{UPLOAD_PURPOSE}/")
+                or storage.owner_id_from_key(file_key) != str(user.id)
+            ):
+                raise MediPickException("INVALID_FILE_KEY", 400, "That file key wasn't issued to you.")
+            if not storage.file_exists(file_key):
+                raise MediPickException("FILE_NOT_UPLOADED", 400, "Upload the file to the upload URL first.")
 
-        existing = (await db.execute(select(Prescription).where(Prescription.file_key == file_key))).scalar_one_or_none()
+        # Just check the first one for existing to avoid complex array queries
+        existing = (await db.execute(select(Prescription).where(Prescription.file_key == file_keys[0]))).scalar_one_or_none()
         if existing is not None:
             return existing  # re-registering the same upload is a harmless retry
 
@@ -62,13 +64,17 @@ class PrescriptionService:
             if (await db.execute(select(Pharmacy.id).where(Pharmacy.id == pharmacy_id))).first() is None:
                 raise MediPickException("PHARMACY_NOT_FOUND", 404, "Pharmacy not found.")
 
-        data = storage.read_file(file_key)
+        # Primary file for backward compatibility
+        primary_key = file_keys[0]
+        data = storage.read_file(primary_key)
+        
         prescription = Prescription(
             customer_id=customer.id,
             pharmacy_id=pharmacy_id,
-            file_key=file_key,
+            file_key=primary_key,
+            file_keys=file_keys,
             file_type=storage.detect_content_type(data) or "application/octet-stream",
-            file_size_bytes=len(data),
+            file_size_bytes=sum(len(storage.read_file(fk)) for fk in file_keys),
             status=PrescriptionStatus.PRESCRIPTION_VALIDATION,
         )
         db.add(prescription)

@@ -20,7 +20,7 @@ class UploadUrlResponse(BaseModel):
 
 
 class RegisterPrescriptionBody(BaseModel):
-    fileKey: str = Field(..., max_length=255)
+    fileKeys: list[str] = Field(..., min_items=1)
     pharmacyId: uuid.UUID | None = None
 
 
@@ -35,9 +35,14 @@ class PrescriptionOut(BaseModel):
 
     @staticmethod
     def from_prescription(p: Prescription) -> "PrescriptionOut":
+        if p.is_purged:
+            urls = ""
+        else:
+            urls = ",".join(storage.create_download_url(k) for k in p.file_key.split(","))
+            
         return PrescriptionOut(
             id=str(p.id),
-            fileUrl="" if p.is_purged else storage.create_download_url(p.file_key),
+            fileUrl=urls,
             aiClarityScore=p.ai_clarity_score,
             aiChecks=p.ai_checks,
             status=p.status,

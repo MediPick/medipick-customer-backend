@@ -40,6 +40,7 @@ class Prescription(Base):
 
     patient_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     file_key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    file_keys: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
     file_type: Mapped[str] = mapped_column(String(50), nullable=False)
     file_size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
 

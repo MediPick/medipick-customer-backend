@@ -43,7 +43,7 @@ async def register_prescription(
 ):
     user, customer = current
     prescription = await prescription_service.register(
-        db, user, customer, body.fileKey, body.pharmacyId, background_tasks,
+        db, user, customer, body.fileKeys, body.pharmacyId, background_tasks,
     )
     return SuccessResponse(data=PrescriptionOut.from_prescription(prescription))
 
