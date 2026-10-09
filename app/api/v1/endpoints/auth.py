@@ -19,6 +19,8 @@ from app.schemas.auth import (
     OtpResendBody,
     OtpVerifyBody,
     OtpVerifyResponse,
+    AuthChallengeBody,
+    AuthChallengeResponse,
     TokenRefreshBody,
     TokenRefreshResponse,
     ValidateTokenResponse,
@@ -33,13 +35,10 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/otp/request", response_model=SuccessResponse[OtpRequestResponse], summary="A1.1 — Request OTP")
 async def request_otp(body: OtpRequestBody, db: AsyncSession = Depends(get_db)):
-    """Upserts user + customer profile, generates OTP (printed to terminal in dev)."""
-    user, customer = await auth_service.upsert_user_and_customer(
+    """Upserts bare user + customer profile if missing, generates OTP."""
+    user, customer = await auth_service.find_or_create_bare_user(
         db=db,
         phone_number=body.phoneNumber,
-        username=body.surname,
-        email=str(body.email) if body.email else None,
-        consent_data_processing=body.consentDataProcessing,
     )
     await otp_service.request_otp(db=db, customer=customer, phone_number=body.phoneNumber)
     return SuccessResponse(data=OtpRequestResponse(message=f"OTP sent to {body.phoneNumber}", expiresIn=300))
@@ -62,10 +61,15 @@ async def verify_otp(body: OtpVerifyBody, db: AsyncSession = Depends(get_db)):
     
     access_token, refresh_token = await auth_service.issue_tokens(db=db, user=user, customer=customer)
 
+    is_new = not customer.username
+    requires_challenge = not is_new
+
     return SuccessResponse(data=OtpVerifyResponse(
         accessToken=access_token,
         refreshToken=refresh_token,
         expiresIn=900,
+        isNewUser=is_new,
+        requiresChallenge=requires_challenge,
         user=UserOut.from_orm_customer(customer, user),
     ))
 
@@ -111,3 +115,68 @@ async def validate_token(db: AsyncSession = Depends(get_db), current_user: User 
     if not customer:
         raise MediPickException("PROFILE_NOT_FOUND", 404, "Customer profile not found.")
     return SuccessResponse(data=ValidateTokenResponse(user=UserOut.from_orm_customer(customer, current_user)))
+
+from app.models.user import UserRole
+
+@router.post("/challenge", response_model=SuccessResponse[AuthChallengeResponse], summary="A1.7 — Security Challenge")
+async def verify_challenge(
+    body: AuthChallengeBody, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Handles surname setup for new users and typo/recycled number checks for returning users."""
+    cust_result = await db.execute(select(Customer).where(Customer.user_id == current_user.id))
+    customer = cust_result.scalar_one_or_none()
+    
+    if not customer:
+        raise MediPickException("PROFILE_NOT_FOUND", 404, "Customer profile not found.")
+        
+    if not customer.username:
+        # New User Setup
+        customer.username = body.surname
+        customer.consent_data_processing = body.consentDataProcessing
+        if body.email:
+            current_user.email = body.email
+            db.add(current_user)
+        await db.flush()
+    else:
+        # Returning User Challenge
+        if customer.username.strip().lower() != body.surname.strip().lower():
+            if not body.isRecycledClaim:
+                raise MediPickException("SURNAME_MISMATCH", 401, "Surname doesn't match. Try again.")
+            else:
+                import uuid
+                # Recycled Number Flow
+                original_phone = current_user.phone_number
+                # Use a short 20-char unique prefix for the archived phone number
+                current_user.phone_number = f"arc-{uuid.uuid4().hex[:16]}"
+                db.add(current_user)
+                await db.flush()
+                
+                new_user = User(
+                    phone_number=original_phone,
+                    email=body.email if body.email else None,
+                    role=UserRole.CUSTOMER,
+                )
+                db.add(new_user)
+                await db.flush()
+                
+                new_customer = Customer(
+                    user_id=new_user.id,
+                    username=body.surname,
+                    consent_data_processing=body.consentDataProcessing,
+                )
+                db.add(new_customer)
+                await db.flush()
+                
+                current_user = new_user
+                customer = new_customer
+                
+    access_token, refresh_token = await auth_service.issue_tokens(db=db, user=current_user, customer=customer)
+    
+    return SuccessResponse(data=AuthChallengeResponse(
+        accessToken=access_token,
+        refreshToken=refresh_token,
+        expiresIn=900,
+        user=UserOut.from_orm_customer(customer, current_user),
+    ))

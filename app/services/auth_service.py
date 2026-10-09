@@ -34,53 +34,31 @@ class AuthService:
 
     # ── Upsert User + Customer Profile ────────────────────────────────────────
 
-    async def upsert_user_and_customer(
+    async def find_or_create_bare_user(
         self,
         db: AsyncSession,
         phone_number: str,
-        username: str,
-        email: str | None = None,
-        consent_data_processing: bool = True,
     ) -> tuple[User, Customer]:
         """
-        Step 1: Upsert into `users` (by phone_number, role=CUSTOMER).
-        Step 2: Upsert into `customers` (linked via user_id FK).
-        Returns (user, customer).
+        Finds existing user by phone. If not found, creates a bare user + customer profile
+        with an empty username. The username is collected post-OTP.
         """
-        # ── Find Existing User by Phone ───────────────────────────────────────
         result = await db.execute(
             select(User).where(User.phone_number == phone_number)
         )
         user = result.scalar_one_or_none()
-
         customer = None
 
-        if user is not None:
-            # Check if this is a recycled number scenario by comparing surnames
+        if user:
             cust_result = await db.execute(
                 select(Customer).where(Customer.user_id == user.id)
             )
-            existing_customer = cust_result.scalar_one_or_none()
+            customer = cust_result.scalar_one_or_none()
 
-            if existing_customer and existing_customer.username.strip().lower() != username.strip().lower():
-                # SURNAME MISMATCH (Recycled number detected)
-                # Archive the old user so their medical data remains inaccessible
-                user.phone_number = f"{phone_number}-archived-{user.id}"
-                db.add(user)
-                await db.flush()
-                
-                # Treat as a brand new user from here on
-                user = None
-                customer = None
-            else:
-                customer = existing_customer
-
-        # ── Upsert Logic ──────────────────────────────────────────────────────
         if user is None:
             # Create Brand New User
             user = User(
                 phone_number=phone_number,
-                email=email,
                 role=UserRole.CUSTOMER,
             )
             db.add(user)
@@ -88,22 +66,12 @@ class AuthService:
             
             customer = Customer(
                 user_id=user.id,
-                username=username,
-                consent_data_processing=consent_data_processing,
+                username="",  # Empty string means New User needing Name setup
+                consent_data_processing=True,
             )
             db.add(customer)
-        else:
-            # Update Existing User
-            if email:
-                user.email = email
-                
-            if customer:
-                # We don't overwrite the username here, it already matched (case-insensitive)
-                # Just update consent if provided
-                if consent_data_processing is not None:
-                    customer.consent_data_processing = consent_data_processing
-        
-        await db.flush()
+            await db.flush()
+
         return user, customer
 
     # ── Issue Tokens ──────────────────────────────────────────────────────────

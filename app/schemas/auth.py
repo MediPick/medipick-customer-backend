@@ -12,15 +12,19 @@ from app.schemas.user import UserOut
 # ─── A1.1 / A1.3 — OTP Request / Resend ─────────────────────────────────────
 
 class OtpRequestBody(BaseModel):
-    """POST /auth/otp/request. Matches OtpRequestPayload in src/api/authApi.ts."""
+    """POST /auth/otp/request."""
     phoneNumber: str = Field(
         ...,
         pattern=r"^\+[1-9]\d{7,14}$",
         description="E.164 format e.g. +94771234567",
         examples=["+94771234567"],
     )
+
+class AuthChallengeBody(BaseModel):
+    """POST /auth/challenge."""
     surname: str = Field(..., min_length=2, max_length=100)
     email: EmailStr | None = None
+    isRecycledClaim: bool = False
     consentDataProcessing: bool = True
 
 
@@ -49,8 +53,17 @@ class OtpVerifyBody(BaseModel):
 class OtpVerifyResponse(BaseModel):
     """Tokens + user profile returned on successful login"""
     accessToken: str
-    refreshToken: str
+    refreshToken: str | None = None
     expiresIn: int = 900  # 15 minutes in seconds
+    isNewUser: bool = False
+    requiresChallenge: bool = False
+    user: UserOut | None = None
+
+class AuthChallengeResponse(BaseModel):
+    """Tokens + user profile returned after challenge"""
+    accessToken: str
+    refreshToken: str
+    expiresIn: int = 900
     user: UserOut
 
 
