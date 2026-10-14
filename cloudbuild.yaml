@@ -1,21 +1,13 @@
 steps:
-  # =========================================================================
-  # STEP 1: Spin up Docker & Run automated tests
-  # =========================================================================
   - name: 'gcr.io/cloud-builders/docker'
     id: 'test'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
-        echo "Building Docker container for testing..."
         docker build -t test-runner .
-        echo "Spinning up container to run unit tests..."
         docker run --rm test-runner pytest tests/
 
-  # =========================================================================
-  # STEP 2: Tag image for Artifact Registry
-  # =========================================================================
   - name: 'gcr.io/cloud-builders/docker'
     id: 'tag'
     args:
@@ -23,18 +15,12 @@ steps:
       - 'test-runner'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
 
-  # =========================================================================
-  # STEP 3: Push image to Google Artifact Registry
-  # =========================================================================
   - name: 'gcr.io/cloud-builders/docker'
     id: 'push'
     args:
       - 'push'
       - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO_NAME}/${_SERVICE_NAME}-${_ENV}:${SHORT_SHA}'
 
-  # =========================================================================
-  # STEP 4: Deploy to Google Cloud Run (Agnostic to environment)
-  # =========================================================================
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'deploy'
     entrypoint: 'gcloud'
@@ -51,11 +37,9 @@ steps:
       - '--max-instances=2'
       - '--set-env-vars=APP_ENV=${_ENV}'
 
-# Environment-agnostic substitutions (can be overridden by Cloud Build Trigger)
 substitutions:
   _REGION: 'asia-south1'
   _REPO_NAME: 'medipick-repo'
-
   _SERVICE_NAME: 'customer-backend'
   _ENV: 'dev'
 
