@@ -18,12 +18,13 @@ from app.config import settings
 # ─── Engine ───────────────────────────────────────────────────────────────────
 engine = create_async_engine(
     settings.DATABASE_URL,
-    # echo=settings.is_development,   # disabled because it floods the terminal with logs
     echo=False,
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,             # detect stale connections
+    connect_args={"statement_cache_size": 0},  # Required for Supabase transaction pooler
 )
+
 
 # ─── Session Factory ──────────────────────────────────────────────────────────
 AsyncSessionLocal = async_sessionmaker(
